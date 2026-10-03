@@ -54,24 +54,51 @@ object DeviceActionHandler {
     private fun makeCall(context: Context, contactOrNumber: String): String {
         if (contactOrNumber.isBlank()) return "No contact or number provided."
         val prefs = MikaApplication.instance.preferences
-        val cleanNumber = contactOrNumber.filter { it.isDigit() || it == '+' }
+        var phoneNumber = contactOrNumber.filter { it.isDigit() || it == '+' }
 
-        val intent = if (prefs.directCallingAllowed && cleanNumber.isNotBlank()) {
-            Intent(Intent.ACTION_CALL, Uri.parse("tel:$cleanNumber")).apply {
+        if (phoneNumber.isBlank()) {
+            phoneNumber = lookupContactNumber(context, contactOrNumber) ?: ""
+        }
+
+        val dialUri = if (phoneNumber.isNotBlank()) "tel:$phoneNumber" else "tel:${Uri.encode(contactOrNumber)}"
+        val intent = if (prefs.directCallingAllowed && phoneNumber.isNotBlank()) {
+            Intent(Intent.ACTION_CALL, Uri.parse(dialUri)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         } else {
-            Intent(Intent.ACTION_DIAL, Uri.parse("tel:${cleanNumber.ifBlank { contactOrNumber }}")).apply {
+            Intent(Intent.ACTION_DIAL, Uri.parse(dialUri)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         }
 
         return try {
             context.startActivity(intent)
-            "Initiated call to $contactOrNumber"
+            "Initiated call for $contactOrNumber"
         } catch (e: Exception) {
             "Failed to place call: ${e.localizedMessage}"
         }
+    }
+
+    fun lookupContactNumber(context: Context, nameQuery: String): String? {
+        try {
+            val cursor = context.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+                arrayOf("%$nameQuery%"),
+                null
+            )
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val numIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    if (numIndex != -1) {
+                        return it.getString(numIndex)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return null
     }
 
     private fun draftEmail(context: Context, args: String): String {
