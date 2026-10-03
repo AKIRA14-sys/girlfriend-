@@ -8,7 +8,13 @@ let speechSimInterval = null;
 
 function initScene() {
     const container = document.getElementById('canvas-container');
-    if (!THREE || !container) return;
+    if (!container) return;
+
+    if (typeof THREE === 'undefined') {
+        showPlaceholder();
+        if (window.AndroidBridge) AndroidBridge.modelError("3D Graphics engine loaded in fallback mode.");
+        return;
+    }
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(30, container.clientWidth / container.clientHeight, 0.1, 20.0);
@@ -38,16 +44,18 @@ function updateCameraPosition() {
 }
 
 function loadModel(vrmUrl) {
-    if (!window.THREE || !window.THREE.VRM) {
+    if (typeof THREE === 'undefined' || typeof THREE.VRM === 'undefined') {
         showPlaceholder();
-        if (window.AndroidBridge) AndroidBridge.modelError("Three.js or VRM library not loaded.");
+        if (window.AndroidBridge) AndroidBridge.modelError("VRM Loader engine in fallback mode.");
         return;
     }
 }
 
 function showPlaceholder() {
-    document.getElementById('canvas-container').style.display = 'none';
-    document.getElementById('placeholder-container').style.display = 'flex';
+    const canvasContainer = document.getElementById('canvas-container');
+    const placeholderContainer = document.getElementById('placeholder-container');
+    if (canvasContainer) canvasContainer.style.display = 'none';
+    if (placeholderContainer) placeholderContainer.style.display = 'flex';
 }
 
 function setExpression(name) {
@@ -74,3 +82,9 @@ function stopSpeech() {
 function speakAudio(base64Audio) {
     startSimulatedSpeech();
 }
+
+window.onerror = function(msg, url, line) {
+    if (window.AndroidBridge) {
+        AndroidBridge.modelError("JS Error: " + msg + " at line " + line);
+    }
+};

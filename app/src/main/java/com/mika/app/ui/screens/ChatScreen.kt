@@ -1,5 +1,13 @@
 package com.mika.app.ui.screens
 
+import android.Manifest
+import android.content.Intent
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -38,6 +47,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -56,6 +67,7 @@ import com.mika.app.domain.ActionTag
 import com.mika.app.ui.components.AvatarPlaceholder
 import com.mika.app.viewmodel.ChatUiState
 import com.mika.app.viewmodel.ChatViewModel
+import java.util.Locale
 
 @Composable
 fun ChatScreen(
@@ -65,6 +77,7 @@ fun ChatScreen(
     onOpenSettingsScreen: () -> Unit,
     onConfirmAction: (ActionTag) -> Unit
 ) {
+    val context = LocalContext.current
     val messages by viewModel.messages.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -72,7 +85,63 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
+    var isListening by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+
+    var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            speechRecognizer?.destroy()
+        }
+    }
+
+    fun startListening() {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) return
+        speechRecognizer?.destroy()
+
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+            setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) { isListening = true }
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() { isListening = false }
+                override fun onError(error: Int) { isListening = false }
+                override fun onResults(results: Bundle?) {
+                    isListening = false
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    val text = matches?.firstOrNull()
+                    if (!text.isNullOrBlank()) {
+                        inputText = text
+                        viewModel.sendMessage(text)
+                        inputText = ""
+                    }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    matches?.firstOrNull()?.let { inputText = it }
+                }
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        }
+        speechRecognizer = recognizer
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
+        recognizer.startListening(intent)
+    }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startListening()
+        }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -247,6 +316,23 @@ fun ChatScreen(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             )
+
+            IconButton(
+                onClick = {
+                    audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                },
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (isListening) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Voice Input",
+                    tint = if (isListening) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.primary
+                )
+            }
 
             IconButton(
                 onClick = {
