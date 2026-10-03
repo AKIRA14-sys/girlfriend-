@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mika 3D Avatar</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #120E18; }
+        #canvas-container { width: 100%; height: 100%; touch-action: none; }
+        #placeholder-container {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; color: #F3E5F5; font-family: sans-serif; text-align: center; padding: 20px;
+        }
+        .avatar-circle {
+            width: 140px; height: 140px; border-radius: 50%;
+            background: radial-gradient(circle, #FF80AB 0%, #B388FF 60%, #1E1728 100%);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 56px; font-weight: bold; color: #000; box-shadow: 0 0 25px rgba(255,128,171,0.5);
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #2D233C; padding: 20px; border-radius: 16px; max-width: 320px;
+        }
+        .card h3 { margin-bottom: 8px; color: #FF80AB; }
+        .card p { font-size: 14px; color: #CE93D8; margin-bottom: 16px; }
+        .btn {
+            background: #FF80AB; color: #000; font-weight: bold; padding: 10px 20px;
+            border-radius: 20px; text-decoration: none; display: inline-block; cursor: pointer;
+        }
+    </style>
+    <script src="three.min.js"></script>
+    <script src="vrm.min.js"></script>
+</head>
+<body>
+    <div id="canvas-container" style="display: none;"></div>
+
+    <div id="placeholder-container">
+        <div class="avatar-circle" id="avatar-initial">M</div>
+        <div class="card">
+            <h3>Add your 3D model</h3>
+            <p>You can import a .vrm file in Settings to see Mika in full 3D!</p>
+            <div class="btn" onclick="if(window.AndroidBridge) AndroidBridge.openSettings();">Open Settings</div>
+        </div>
+    </div>
+
+    <script src="avatar.js"></script>
+</body>
+</html>
