@@ -27,6 +27,17 @@
             border-radius: 20px; display: inline-block; cursor: pointer;
         }
     </style>
+
+    <!-- Official matched versions from the three-vrm documentation -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js"
+        }
+    }
+    </script>
 </head>
 <body>
     <div id="canvas-container" style="display:none;"></div>
@@ -40,10 +51,18 @@
         </div>
     </div>
 
-    <!-- Correct load order -->
-    <script src="three.min.js"></script>
-    <script src="GLTFLoader.js"></script>
-    <script src="three-vrm.min.js"></script>
-    <script src="avatar.js"></script>
+    <script>
+        // Holds the model request until the 3D engine has finished downloading.
+        window.__pending = null;
+        window.__moduleReady = false;
+        window.loadModel = function (url) { window.__pending = url; };
+        setTimeout(function () {
+            if (!window.__moduleReady && window.AndroidBridge) {
+                AndroidBridge.modelError('The 3D engine could not download. Check your internet connection and try again.');
+            }
+        }, 25000);
+    </script>
+    <script type="module" src="avatar.js"
+        onerror="if(window.AndroidBridge) AndroidBridge.modelError('The 3D engine files could not be downloaded. Check your internet connection and try again.');"></script>
 </body>
 </html>
