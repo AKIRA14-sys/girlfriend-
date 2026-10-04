@@ -29,8 +29,15 @@
             border-radius: 20px; text-decoration: none; display: inline-block; cursor: pointer;
         }
     </style>
-    <script src="three.min.js"></script>
-    <script src="vrm.min.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.0.0/lib/three-vrm.module.js"
+        }
+    }
+    </script>
 </head>
 <body>
     <div id="canvas-container" style="display: none;"></div>
@@ -44,6 +51,6 @@
         </div>
     </div>
 
-    <script src="avatar.js"></script>
+    <script type="module" src="avatar.js"></script>
 </body>
 </html>

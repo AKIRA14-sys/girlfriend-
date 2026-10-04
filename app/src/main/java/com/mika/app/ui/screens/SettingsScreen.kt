@@ -24,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -39,11 +40,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.mika.app.viewmodel.SettingsViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +58,7 @@ fun SettingsScreen(
     onOpenPermissions: () -> Unit,
     onOpenAvatarPicker: () -> Unit
 ) {
+    val context = LocalContext.current
     val prefs = viewModel.preferences
     val testConnectionState by viewModel.testConnectionState.collectAsState()
 
@@ -66,6 +70,7 @@ fun SettingsScreen(
     var companionName by remember { mutableStateOf(prefs.companionName) }
     var personalityText by remember { mutableStateOf(prefs.personalityText) }
     var attitudeLevel by remember { mutableStateOf(prefs.attitudeLevel) }
+    var vrmFilePath by remember { mutableStateOf(prefs.vrmFilePath) }
 
     var speakReplies by remember { mutableStateOf(prefs.speakReplies) }
     var speechSpeed by remember { mutableStateOf(prefs.speechSpeed) }
@@ -77,6 +82,15 @@ fun SettingsScreen(
     var cameraEnabled by remember { mutableStateOf(prefs.cameraEnabled) }
     var recognizePeopleEnabled by remember { mutableStateOf(prefs.recognizePeopleEnabled) }
     var liveScreenEnabled by remember { mutableStateOf(prefs.liveScreenEnabled) }
+
+    val avatarFileSizeMb = remember(vrmFilePath) {
+        if (!vrmFilePath.isNullOrBlank()) {
+            val file = File(context.filesDir, "avatar/$vrmFilePath")
+            if (file.exists()) {
+                String.format("%.1f", file.length() / (1024f * 1024f))
+            } else null
+        } else null
+    }
 
     Scaffold(
         topBar = {
@@ -204,7 +218,7 @@ fun SettingsScreen(
                 }
             }
 
-            SectionHeader("Companion Settings")
+            SectionHeader("Companion & Avatar Settings")
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
@@ -241,11 +255,42 @@ fun SettingsScreen(
                         valueRange = 0f..1f
                     )
 
-                    Button(
-                        onClick = onOpenAvatarPicker,
-                        modifier = Modifier.fillMaxWidth()
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    Text(
+                        text = if (!vrmFilePath.isNullOrBlank()) {
+                            "Current Avatar: $vrmFilePath ${if (avatarFileSizeMb != null) "($avatarFileSizeMb MB)" else ""}"
+                        } else {
+                            "Current Avatar: No avatar selected"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Choose Avatar (.vrm)")
+                        Button(
+                            onClick = onOpenAvatarPicker,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Choose Avatar (.vrm)")
+                        }
+
+                        if (!vrmFilePath.isNullOrBlank()) {
+                            OutlinedButton(
+                                onClick = {
+                                    val file = File(context.filesDir, "avatar/$vrmFilePath")
+                                    if (file.exists()) file.delete()
+                                    prefs.vrmFilePath = null
+                                    vrmFilePath = null
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Remove Avatar", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                 }
             }

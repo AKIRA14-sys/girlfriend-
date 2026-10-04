@@ -2,11 +2,14 @@ package com.mika.app.ui.screens
 
 import android.webkit.WebView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,11 +22,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.VideoCameraFront
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -38,10 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mika.app.avatar.AvatarController
+import com.mika.app.ui.components.AvatarPlaceholder
 import com.mika.app.viewmodel.ChatViewModel
 
 @Composable
@@ -57,6 +66,9 @@ fun AvatarScreen(
     var heavyModelHint by remember { mutableStateOf(false) }
     var avatarController by remember { mutableStateOf<AvatarController?>(null) }
     var cameraPreset by remember { mutableStateOf("fullBody") }
+
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(avatarController) {
         avatarController?.let { controller ->
@@ -80,17 +92,24 @@ fun AvatarScreen(
                     val controller = AvatarController(
                         webView = webView,
                         onModelLoaded = { triangles ->
+                            isLoading = false
+                            errorMessage = null
                             if (triangles > 100000) {
                                 heavyModelHint = true
                             }
                         },
-                        onModelError = { _ -> },
+                        onModelError = { err ->
+                            isLoading = false
+                            errorMessage = err
+                        },
                         onOpenSettings = onOpenSettings
                     )
                     avatarController = controller
 
                     if (!vrmFileName.isNullOrBlank()) {
                         controller.loadModel(vrmFileName)
+                    } else {
+                        isLoading = false
                     }
                 }
             },
@@ -103,6 +122,68 @@ fun AvatarScreen(
             }
         }
 
+        // Loading Overlay
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Loading 3D Avatar...", color = MaterialTheme.colorScheme.onBackground)
+                }
+            }
+        }
+
+        // Error State Overlay with Retry and Choose Avatar Buttons
+        errorMessage?.let { errorText ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    AvatarPlaceholder(name = companionName, size = 100.dp)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Could not load 3D avatar",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row {
+                        OutlinedButton(onClick = {
+                            isLoading = true
+                            errorMessage = null
+                            vrmFileName?.let { avatarController?.loadModel(it) }
+                        }) {
+                            Text("Try again")
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Button(onClick = onOpenSettings) {
+                            Text("Choose Avatar")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Top Navigation Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()

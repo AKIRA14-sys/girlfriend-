@@ -2,12 +2,15 @@ package com.mika.app.avatar
 
 import android.content.Context
 import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
+import java.io.File
 
 class AvatarController(
     private val webView: WebView,
@@ -16,15 +19,20 @@ class AvatarController(
     private val onOpenSettings: () -> Unit = {}
 ) {
 
+    private var isPageLoaded = false
+    private var pendingVrmFileName: String? = null
+
     init {
         setupWebView()
     }
 
     private fun setupWebView() {
         val context = webView.context
+        val avatarDir = File(context.filesDir, "avatar").apply { if (!exists()) mkdirs() }
+
         val assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(context))
-            .addPathHandler("/files/", WebViewAssetLoader.InternalStoragePathHandler(context, context.filesDir))
+            .addPathHandler("/avatar-files/", WebViewAssetLoader.InternalStoragePathHandler(context, avatarDir))
             .build()
 
         webView.settings.apply {
@@ -43,13 +51,50 @@ class AvatarController(
             ): WebResourceResponse? {
                 return assetLoader.shouldInterceptRequest(request.url)
             }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                isPageLoaded = true
+                pendingVrmFileName?.let {
+                    loadModel(it)
+                    pendingVrmFileName = null
+                }
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onReceivedError(
+                view: WebView,
+                errorCode: Int,
+                description: String?,
+                failingUrl: String?
+            ) {
+                super.onReceivedError(view, errorCode, description, failingUrl)
+                onModelError("WebView error: $description")
+            }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                consoleMessage?.let {
+                    if (it.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                        Log.e("AvatarWebView", "${it.message()} -- From line ${it.lineNumber()} of ${it.sourceId()}")
+                        onModelError(it.message())
+                    }
+                }
+                return true
+            }
         }
 
         webView.loadUrl("https://appassets.androidplatform.net/assets/avatar/index.html")
     }
 
     fun loadModel(vrmFileName: String) {
-        val url = "https://appassets.androidplatform.net/files/$vrmFileName"
+        if (!isPageLoaded) {
+            pendingVrmFileName = vrmFileName
+            return
+        }
+        val timestamp = System.currentTimeMillis()
+        val url = "https://appassets.androidplatform.net/avatar-files/$vrmFileName?v=$timestamp"
         runJs("loadModel('$url')")
     }
 
