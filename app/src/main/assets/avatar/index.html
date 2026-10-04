@@ -16,34 +16,23 @@
             width: 140px; height: 140px; border-radius: 50%;
             background: radial-gradient(circle, #FF80AB 0%, #B388FF 60%, #1E1728 100%);
             display: flex; align-items: center; justify-content: center;
-            font-size: 56px; font-weight: bold; color: #000; box-shadow: 0 0 25px rgba(255,128,171,0.5);
-            margin-bottom: 24px;
+            font-size: 56px; font-weight: bold; color: #000;
+            box-shadow: 0 0 25px rgba(255,128,171,0.5); margin-bottom: 24px;
         }
-        .card {
-            background: #2D233C; padding: 20px; border-radius: 16px; max-width: 320px;
-        }
+        .card { background: #2D233C; padding: 20px; border-radius: 16px; max-width: 320px; }
         .card h3 { margin-bottom: 8px; color: #FF80AB; }
         .card p { font-size: 14px; color: #CE93D8; margin-bottom: 16px; }
         .btn {
             background: #FF80AB; color: #000; font-weight: bold; padding: 10px 20px;
-            border-radius: 20px; text-decoration: none; display: inline-block; cursor: pointer;
+            border-radius: 20px; display: inline-block; cursor: pointer;
         }
     </style>
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.0.0/lib/three-vrm.module.js"
-        }
-    }
-    </script>
 </head>
 <body>
-    <div id="canvas-container" style="display: none;"></div>
+    <div id="canvas-container" style="display:none;"></div>
 
     <div id="placeholder-container">
-        <div class="avatar-circle" id="avatar-initial">M</div>
+        <div class="avatar-circle">M</div>
         <div class="card">
             <h3>Add your 3D model</h3>
             <p>Import a .vrm file in Settings to see Mika in full 3D!</p>
@@ -51,6 +40,10 @@
         </div>
     </div>
 
-    <script type="module" src="avatar.js"></script>
+    <!-- Correct load order -->
+    <script src="three.min.js"></script>
+    <script src="GLTFLoader.js"></script>
+    <script src="three-vrm.min.js"></script>
+    <script src="avatar.js"></script>
 </body>
 </html>
