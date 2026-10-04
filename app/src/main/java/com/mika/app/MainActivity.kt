@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -43,7 +44,11 @@ import com.mika.app.viewmodel.ChatViewModel
 import com.mika.app.viewmodel.DataViewModel
 import com.mika.app.viewmodel.MemoriesViewModel
 import com.mika.app.viewmodel.SettingsViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 enum class AppScreen {
@@ -130,15 +135,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun copyVrmToInternalStorage(uri: Uri, preferences: AppPreferences) {
-        try {
-            val destinationFile = File(filesDir, "custom_avatar.vrm")
-            contentResolver.openInputStream(uri)?.use { input ->
-                destinationFile.outputStream().use { output ->
-                    input.copyTo(output)
+        Toast.makeText(this, "Importing avatar...", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val avatarDir = File(filesDir, "avatar").apply { if (!exists()) mkdirs() }
+                val destinationFile = File(avatarDir, "companion.vrm")
+
+                val input = contentResolver.openInputStream(uri) ?: throw IOException("Could not open file stream")
+                input.use { inputStream ->
+                    destinationFile.outputStream().buffered().use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+
+                val sizeMb = String.format("%.1f", destinationFile.length() / (1024f * 1024f))
+                preferences.vrmFilePath = destinationFile.name
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Avatar imported ($sizeMb MB)", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Could not import avatar: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                 }
             }
-            preferences.vrmFilePath = destinationFile.name
-        } catch (_: Exception) {
         }
     }
 
