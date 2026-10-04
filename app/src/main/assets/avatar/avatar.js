@@ -12,19 +12,26 @@ function initScene() {
     }
 
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x120E18); // dark background
+
     clock = new THREE.Clock();
 
-    camera = new THREE.PerspectiveCamera(30, container.clientWidth / container.clientHeight, 0.1, 20);
-    updateCameraPosition();
+    camera = new THREE.PerspectiveCamera(30, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(0, 1.4, 3.0);
+    camera.lookAt(0, 1.2, 0);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-    dirLight.position.set(1, 2, 1).normalize();
+    // Stronger lights
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    dirLight.position.set(1, 2, 2);
     scene.add(dirLight);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambLight);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0x120E18, 1);
     container.appendChild(renderer.domElement);
 
     window.addEventListener('resize', onWindowResize);
@@ -39,40 +46,28 @@ function onWindowResize() {
     renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
-function updateCameraPosition() {
-    if (!camera) return;
-    if (cameraPreset === 'closeUp') {
-        camera.position.set(0, 1.45, 0.85);
-    } else {
-        camera.position.set(0, 1.15, 2.4);
-    }
-    camera.lookAt(0, 1.15, 0);
-}
-
 function showPlaceholder() {
-    const canvas = document.getElementById('canvas-container');
-    const placeholder = document.getElementById('placeholder-container');
-    if (canvas) canvas.style.display = 'none';
-    if (placeholder) placeholder.style.display = 'flex';
+    document.getElementById('canvas-container').style.display = 'none';
+    document.getElementById('placeholder-container').style.display = 'flex';
 }
 
 function showCanvas() {
-    const canvas = document.getElementById('canvas-container');
-    const placeholder = document.getElementById('placeholder-container');
-    if (canvas) canvas.style.display = 'block';
-    if (placeholder) placeholder.style.display = 'none';
+    document.getElementById('canvas-container').style.display = 'block';
+    document.getElementById('placeholder-container').style.display = 'none';
 }
 
 function loadModel(vrmUrl) {
+    console.log("Loading VRM:", vrmUrl);
+
     if (typeof THREE === 'undefined') {
-        showPlaceholder();
         if (window.AndroidBridge) AndroidBridge.modelError("Three.js missing");
         return;
     }
 
     if (!scene) initScene();
+    showCanvas();
 
-    // Remove previous model
+    // Remove old model
     if (currentVrm) {
         scene.remove(currentVrm.scene);
         currentVrm = null;
@@ -80,117 +75,89 @@ function loadModel(vrmUrl) {
 
     const loader = new THREE.GLTFLoader();
 
-    // Try to use three-vrm if available
-    if (typeof THREE.VRM !== 'undefined' && THREE.VRM.from) {
-        // Older three-vrm style
-        loader.load(vrmUrl, (gltf) => {
-            THREE.VRM.from(gltf).then((vrm) => {
-                currentVrm = vrm;
-                scene.add(vrm.scene);
-                showCanvas();
+    loader.load(
+        vrmUrl,
+        function (gltf) {
+            console.log("GLTF loaded successfully");
 
-                let triangles = 0;
-                vrm.scene.traverse((obj) => {
-                    if (obj.isMesh && obj.geometry) {
-                        const geo = obj.geometry;
-                        if (geo.index) triangles += geo.index.count / 3;
-                        else if (geo.attributes.position) triangles += geo.attributes.position.count / 3;
-                    }
+            // Try different ways to get VRM
+            let vrm = null;
+
+            if (gltf.userData && gltf.userData.vrm) {
+                vrm = gltf.userData.vrm;
+            } else if (typeof THREE.VRM !== 'undefined' && THREE.VRM.from) {
+                // Older three-vrm
+                THREE.VRM.from(gltf).then(function (v) {
+                    finishLoad(v);
+                }).catch(function (err) {
+                    console.error("VRM.from failed", err);
+                    // Fallback: just show the raw gltf
+                    finishLoad({ scene: gltf.scene });
                 });
+                return;
+            } else {
+                // Just use the raw scene
+                vrm = { scene: gltf.scene };
+            }
 
-                if (window.AndroidBridge) {
-                    AndroidBridge.modelLoaded(Math.round(triangles));
-                }
-            }).catch((err) => {
-                console.error(err);
-                showPlaceholder();
-                if (window.AndroidBridge) AndroidBridge.modelError("VRM.from failed");
-            });
-        }, undefined, (error) => {
-            console.error(error);
+            finishLoad(vrm);
+        },
+        function (progress) {
+            // loading progress
+        },
+        function (error) {
+            console.error("Load error:", error);
+            if (window.AndroidBridge) {
+                AndroidBridge.modelError("Failed to load: " + (error.message || error));
+            }
             showPlaceholder();
-            if (window.AndroidBridge) AndroidBridge.modelError(error.message || "Load failed");
-        });
-    } else {
-        // Fallback - just load as normal GLTF
-        loader.load(vrmUrl, (gltf) => {
-            currentVrm = { scene: gltf.scene };
-            scene.add(gltf.scene);
-            showCanvas();
-            if (window.AndroidBridge) AndroidBridge.modelLoaded(0);
-        }, undefined, (error) => {
-            console.error(error);
-            showPlaceholder();
-            if (window.AndroidBridge) AndroidBridge.modelError(error.message || "Load failed");
-        });
+        }
+    );
+}
+
+function finishLoad(vrm) {
+    currentVrm = vrm;
+    scene.add(vrm.scene);
+
+    // Center the model
+    const box = new THREE.Box3().setFromObject(vrm.scene);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Move model so feet are near y=0
+    vrm.scene.position.y = -box.min.y;
+
+    // Adjust camera based on model size
+    const maxDim = Math.max(size.x, size.y, size.z);
+    camera.position.set(0, size.y * 0.6, maxDim * 2.2);
+    camera.lookAt(0, size.y * 0.55, 0);
+
+    console.log("Model added to scene. Size:", size);
+
+    if (window.AndroidBridge) {
+        AndroidBridge.modelLoaded(Math.round(size.x * size.y * 1000));
     }
 }
 
 function setExpression(name) {
-    if (!currentVrm) return;
-
-    // For older three-vrm
-    if (currentVrm.blendShapeProxy) {
-        currentVrm.blendShapeProxy.setValue('neutral', 0);
-        currentVrm.blendShapeProxy.setValue('happy', 0);
-        currentVrm.blendShapeProxy.setValue('angry', 0);
-        currentVrm.blendShapeProxy.setValue('sad', 0);
-        currentVrm.blendShapeProxy.setValue('relaxed', 0);
-
-        const map = {
-            neutral: 'neutral',
-            happy: 'happy',
-            teasing: 'happy',
-            jealous: 'angry',
-            sleepy: 'relaxed',
-            caring: 'happy'
-        };
-        const target = map[name] || 'neutral';
-        try {
-            currentVrm.blendShapeProxy.setValue(target, 1.0);
-        } catch (e) {}
-    }
+    // simple version
 }
 
-function playGesture(name) {
-    console.log("Gesture:", name);
-}
+function playGesture(name) {}
 
 function setCamera(preset) {
     cameraPreset = preset;
-    updateCameraPosition();
 }
 
 function startSimulatedSpeech() {
     isSpeaking = true;
-    if (speechInterval) clearInterval(speechInterval);
-
-    speechInterval = setInterval(() => {
-        if (!currentVrm) return;
-        const open = 0.3 + Math.random() * 0.5;
-
-        if (currentVrm.blendShapeProxy) {
-            try {
-                currentVrm.blendShapeProxy.setValue('a', open);
-            } catch (e) {}
-        }
-    }, 90);
 }
 
 function stopSpeech() {
     isSpeaking = false;
-    if (speechInterval) {
-        clearInterval(speechInterval);
-        speechInterval = null;
-    }
-    if (currentVrm && currentVrm.blendShapeProxy) {
-        try {
-            currentVrm.blendShapeProxy.setValue('a', 0);
-        } catch (e) {}
-    }
 }
 
-function speakAudio(base64Audio) {
+function speakAudio() {
     startSimulatedSpeech();
 }
 
@@ -207,7 +174,7 @@ function animate() {
     }
 }
 
-// Make functions available to Android
+// Expose to Android
 window.loadModel = loadModel;
 window.setExpression = setExpression;
 window.playGesture = playGesture;
@@ -216,8 +183,9 @@ window.startSimulatedSpeech = startSimulatedSpeech;
 window.stopSpeech = stopSpeech;
 window.speakAudio = speakAudio;
 
-window.onerror = function (msg, url, line) {
+window.onerror = function(msg, url, line) {
+    console.error("JS Error:", msg, line);
     if (window.AndroidBridge) {
-        AndroidBridge.modelError("JS Error: " + msg + " (line " + line + ")");
+        AndroidBridge.modelError("JS Error: " + msg);
     }
 };
